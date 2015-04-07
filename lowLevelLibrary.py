@@ -25,20 +25,27 @@ class aiChannel:
 		
 
 
+import RPi.GPIO as GPIO
+GPIO.setmode(GPIO.BCM)  # use pin numberings printed on cobbler
+
 # create DO channel objects
 class doChannel:
 	def __init__(self,confDict):
-		#open connection on physicalChannel
+		# read in static class variables
 		self.name = confDict['name']
-		self.physChan = confDict['physicalChannel']
+		self.physChanNum = confDict['physicalChannel']
 		self.interlocks = {}
+		self.currentState = False
+		GPIO.setup(self.physChanNum,GPIO.OUT)
 		
 	def setState(self, newState):
-		#self.physChan.write(newState)
+		GPIO.output(self.physChanNum, newState)
+		self.currentState = newState
 		print 'state on '+self.name+' has been changed to: '+str(newState)
 		
 	def getState(self):
-		#state = self.physChan.read()
+		state = GPIO.input(self.physChanNum)
+		self.currentState = state
 		return state
 		
 	def createInterlock(self,aiChan,limitVal,logicalFunction):

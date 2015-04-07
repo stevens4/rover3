@@ -86,7 +86,7 @@ digitalOutputsConfDict = {
 		'guiColumn':poohControlsColumn,
 		'labelText': 'source/buffer cooling water',
 		'chamber':'pooh',
-		'physicalChannel':'chan1'
+		'physicalChannel':18
 	},	
 	
     'pooh source roughing pump': {
@@ -94,7 +94,7 @@ digitalOutputsConfDict = {
 		'guiColumn':poohControlsColumn,
 		'labelText': 'source roughing pump',
 		'chamber':'pooh',
-		'physicalChannel':'chan1'
+		'physicalChannel':23
 	},
 	
     'pooh main roughing': {
@@ -102,7 +102,7 @@ digitalOutputsConfDict = {
 		'guiColumn':poohControlsColumn,
 		'labelText': 'main roughing pump',
 		'chamber':'pooh',
-		'physicalChannel':'chan1'
+		'physicalChannel':24
 	},
 	
     'pooh main gate valve': {
@@ -110,7 +110,7 @@ digitalOutputsConfDict = {
 		'guiColumn':poohControlsColumn,
 		'labelText': 'main gate valve',
 		'chamber':'pooh',
-		'physicalChannel':'chan1'
+		'physicalChannel':25
 	},
 
     'pooh main foreline valve': {
@@ -118,7 +118,7 @@ digitalOutputsConfDict = {
 		'guiColumn':poohControlsColumn,
 		'labelText': 'main foreline valve',
 		'chamber':'pooh',
-		'physicalChannel':'chan1'
+		'physicalChannel':12
 	},
 
 	'tigger source foreline valve': {
@@ -126,7 +126,7 @@ digitalOutputsConfDict = {
 		'guiColumn':tiggerControlsColumn,
 		'labelText': 'source foreline valve',
 		'chamber':'tigger',
-		'physicalChannel':'chan1'
+		'physicalChannel':4
 	},
 	
 	'tigger main gate valve': {
@@ -134,7 +134,7 @@ digitalOutputsConfDict = {
 		'guiColumn':tiggerControlsColumn,
 		'labelText': 'main gate valve',
 		'chamber':'tigger',
-		'physicalChannel':'chan1'
+		'physicalChannel':17
 	},
 	
     'tigger diffusion pumps': {
@@ -142,7 +142,7 @@ digitalOutputsConfDict = {
 		'guiColumn':tiggerControlsColumn,
 		'labelText': 'diffusion pumps',
 		'chamber':'tigger',
-		'physicalChannel':'chan1'
+		'physicalChannel':27
 	},
 
 	'tigger main foreline valve': {
@@ -150,7 +150,7 @@ digitalOutputsConfDict = {
 		'guiColumn':tiggerControlsColumn,
 		'labelText': 'main foreline valve',
 		'chamber':'tigger',
-		'physicalChannel':'chan1'
+		'physicalChannel':5
 	},
 
 	'tigger detector gauge': {
@@ -158,15 +158,15 @@ digitalOutputsConfDict = {
 		'guiColumn':tiggerControlsColumn,
 		'labelText': 'main detector gauge',
 		'chamber':'tigger',
-		'physicalChannel':'chan1'
+		'physicalChannel':6 
 	},
 
-	'tigger water valve': {
+	'tigger water valve': {  
 		'guiRow': 11,
 		'guiColumn':tiggerControlsColumn,
 		'labelText': 'water valve',
 		'chamber':'tigger',
-		'physicalChannel':'chan1'
+		'physicalChannel':13
 	}
 
 }

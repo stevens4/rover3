@@ -34,7 +34,7 @@ from config import analogInputsConfDict, digitalOutputsConfDict, roverLogPath
 from lowLevelLibrary import aiChannel, doChannel
 
 # LogFile object for transcript and statusFile
-from filecreationmethods import LogFile
+#from filecreationmethods import LogFile
 
 # import basic os filesystem methods
 import os
@@ -42,11 +42,11 @@ import os
 
 # create the transcript file handle
 transcriptFilename = os.path.join(roverLogPath, 'roverTranscript.tsv')
-transcript = LogFile(transcriptFilename)
+#transcript = LogFile(transcriptFilename)
 
 # create the handle to the status file
 statusFilename = os.path.join(roverLogPath, 'roverStatus.tsv')
-statusFile = LogFile(statusFilename)
+#statusFile = LogFile(statusFilename)
 #lastState = statusFile.readLastLine()
 
 
@@ -157,6 +157,7 @@ class RoverWidget(QtGui.QWidget):
 					print 'turning off '+doToToggle.deviceName
 					doToToggle.LED.toggle()
 					doToToggle.toggleButton.setText("turn on")
+					doToToggle.doObject.setState(False)
 					doToToggle.interlockEnableButton.setEnabled(False)
 					doToToggle.interlockDialogButton.setEnabled(False)
 					
@@ -164,6 +165,7 @@ class RoverWidget(QtGui.QWidget):
 					print 'turning on '+doToToggle.deviceName
 					doToToggle.LED.toggle()
 					doToToggle.toggleButton.setText("turn off")
+					doToToggle.doObject.setState(True)
 					doToToggle.interlockEnableButton.setEnabled(True)
 					doToToggle.interlockDialogButton.setEnabled(True)
 					
@@ -354,6 +356,8 @@ class RoverWidget(QtGui.QWidget):
 				interlockDialogButton = thisInterlockDialogToggle
 			)
 			
+			thisDOControl.doObject = self.digitalOutputs[doName]
+			
 			self.doControls[doName] = thisDOControl
 		
 	
@@ -370,3 +374,5 @@ if __name__ == '__main__':
 	main(container)
 	app.exec_()
 	
+import RPi.GPIO as GPIO
+GPIO.cleanup()
