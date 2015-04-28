@@ -1,0 +1,20 @@
+[0]
+sensechan = pooh main foreline pressure
+logfun = >=
+limval = 0.0
+
+[1]
+sensechan = pooh main foreline pressure
+logfun = >=
+limval = 0.0
+
+[2]
+sensechan = pooh main foreline pressure
+logfun = >=
+limval = 0.0
+
+[3]
+sensechan = pooh main foreline pressure
+logfun = >=
+limval = 0.0
+
