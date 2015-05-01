@@ -28,7 +28,8 @@ analogInputsConfDict = {
         'readOrder':0,
         'gainFactor':RANGES[5],
         'sampleRate':SAMPLE_RATES[7],
-        'mapParams':(0,1,0,0,0), #(-250.,200.,0,0,0), #coeffecients for mapping function starting w/ zeroth order
+        'mappingStyle':'poly', # to map x as a polynomial or exponential. e.g. f(x) = A*x or A^x
+        'mapParams':(-32*(5./9.),100*(5./9.),0,0,0), #coeffecients for mapping function starting w/ zeroth order
         'mappedUnits':'C'
     },    
     
@@ -42,7 +43,8 @@ analogInputsConfDict = {
         'readOrder':1,
         'gainFactor':RANGES[0],
         'sampleRate':SAMPLE_RATES[7],
-        'mapParams':(0,1,0,0,0), #coeffecients for mapping function starting w/ zeroth order
+        'mappingStyle':'exp', # to map x as a polynomial or exponential. e.g. f(x) = A*x or A^x
+        'mapParams':(.1,10), #.1*10^x
         'mappedUnits':'mTorr'
     },
     
@@ -56,7 +58,8 @@ analogInputsConfDict = {
         'readOrder':2,
         'gainFactor':RANGES[0],
         'sampleRate':SAMPLE_RATES[7],
-        'mapParams':(0,1,0,0,0), #coeffecients for mapping function starting w/ zeroth order
+        'mappingStyle':'exp', # to map x as a polynomial or exponential. e.g. f(x) = A*x or A^x
+        'mapParams':(.1,10), # .1*10^x
         'mappedUnits':'mTorr'
     },
     
@@ -70,7 +73,8 @@ analogInputsConfDict = {
         'readOrder':3,
         'gainFactor':RANGES[0],
         'sampleRate':SAMPLE_RATES[7],
-        'mapParams':(0,1,0,0,0), #coeffecients for mapping function starting w/ zeroth order
+        'mappingStyle':'poly', # to map x as a polynomial or exponential. e.g. f(x) = A*x or A^x
+        'mapParams':(-1.50696,76.7746,38.6482,10.1299,0), #coeffecients for mapping function starting w/ zeroth order
         'mappedUnits':'mTorr'
     },
     
@@ -84,7 +88,8 @@ analogInputsConfDict = {
         'readOrder':4,
         'gainFactor':RANGES[0],
         'sampleRate':SAMPLE_RATES[7],
-        'mapParams':(0,1,0,0,0), #coeffecients for mapping function starting w/ zeroth order
+        'mappingStyle':'poly', # to map x as a polynomial or exponential. e.g. f(x) = A*x or A^x
+        'mapParams':(-1.50696,76.7746,38.6482,10.1299,0), #coeffecients for mapping function starting w/ zeroth order
         'mappedUnits':'mTorr'
     },
     
@@ -98,7 +103,8 @@ analogInputsConfDict = {
         'readOrder':5,
         'gainFactor':RANGES[0],
         'sampleRate':SAMPLE_RATES[7],
-        'mapParams':(0,1,0,0,0), #coeffecients for mapping function starting w/ zeroth order
+        'mappingStyle':'poly', # to map x as a polynomial or exponential. e.g. f(x) = A*x or A^x
+        'mapParams':(-1.50696,76.7746,38.6482,10.1299,0), #coeffecients for mapping function starting w/ zeroth order
         'mappedUnits':'mTorr'
     }
 }
@@ -108,20 +114,21 @@ poohControlsColumn = 0
 tiggerControlsColumn = 6 
 
 digitalOutputsConfDict = {
-    'pooh source-buffer cooling water': {
+
+    'pooh main foreline valve': {
         'guiRow': 6,
         'guiColumn':poohControlsColumn,
-        'labelText': 'source-buffer cooling water',
+        'labelText': 'main foreline valve',
         'chamber':'pooh',
-        'physicalChannel':18
-    },    
+        'physicalChannel':12
+    },
     
-    'pooh source roughing pump': {
+    'pooh main gate valve': {
         'guiRow': 7,
         'guiColumn':poohControlsColumn,
-        'labelText': 'source roughing pump',
+        'labelText': 'main gate valve',
         'chamber':'pooh',
-        'physicalChannel':23
+        'physicalChannel':25
     },
     
     'pooh main roughing': {
@@ -131,63 +138,65 @@ digitalOutputsConfDict = {
         'chamber':'pooh',
         'physicalChannel':24
     },
-    
-    'pooh main gate valve': {
+
+    'pooh source roughing pump': {
         'guiRow': 9,
         'guiColumn':poohControlsColumn,
-        'labelText': 'main gate valve',
+        'labelText': 'source roughing pump',
         'chamber':'pooh',
-        'physicalChannel':25
+        'physicalChannel':23
     },
 
-    'pooh main foreline valve': {
+    'pooh source-buffer cooling water': {
         'guiRow': 10,
         'guiColumn':poohControlsColumn,
-        'labelText': 'main foreline valve',
+        'labelText': 'source-buffer cooling water',
         'chamber':'pooh',
-        'physicalChannel':12
-    },
+        'physicalChannel':18
+    },    
+    
+    ################# BEGIN TIGGER ######################
 
-    'tigger source foreline valve': {
+    'tigger detector gauge': {
         'guiRow': 6,
         'guiColumn':tiggerControlsColumn,
-        'labelText': 'source foreline valve',
+        'labelText': 'main detector gauge',
         'chamber':'tigger',
-        'physicalChannel':4
-    },
-    
-    'tigger main gate valve': {
-        'guiRow': 7,
-        'guiColumn':tiggerControlsColumn,
-        'labelText': 'main gate valve',
-        'chamber':'tigger',
-        'physicalChannel':17
+        'physicalChannel':6 
     },
     
     'tigger diffusion pumps': {
-        'guiRow': 8,
+        'guiRow': 7,
         'guiColumn':tiggerControlsColumn,
         'labelText': 'diffusion pumps',
         'chamber':'tigger',
         'physicalChannel':27
     },
-
+    
     'tigger main foreline valve': {
-        'guiRow': 9,
+        'guiRow': 8,
         'guiColumn':tiggerControlsColumn,
         'labelText': 'main foreline valve',
         'chamber':'tigger',
         'physicalChannel':5
     },
 
-    'tigger detector gauge': {
-        'guiRow': 10,
+    'tigger main gate valve': {
+        'guiRow': 9,
         'guiColumn':tiggerControlsColumn,
-        'labelText': 'main detector gauge',
+        'labelText': 'main gate valve',
         'chamber':'tigger',
-        'physicalChannel':6 
+        'physicalChannel':17
     },
 
+    'tigger source foreline valve': {
+        'guiRow': 10,
+        'guiColumn':tiggerControlsColumn,
+        'labelText': 'source foreline valve',
+        'chamber':'tigger',
+        'physicalChannel':4
+    },
+ 
     'tigger water valve': {  
         'guiRow': 11,
         'guiColumn':tiggerControlsColumn,
