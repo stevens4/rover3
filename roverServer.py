@@ -33,9 +33,6 @@ from lowLevelLibrary import aiChannel, doChannel
 # customized layout and dialog for DO controls
 from customWidgets import doControlRow, interlockConfig
 
-# LogFile object for transcript and statusFile
-#from filecreationmethods import LogFile
-
 # import basic os filesystem methods
 import os
 
@@ -51,7 +48,7 @@ import sys
 from datetime import datetime
 
 ############################### logging ###########################
-
+    
 DEBUG = False
 
 # overwrite the print statement to prepend a timestamp & write these to the transcript file
