@@ -11,13 +11,49 @@ if QtCore.QCoreApplication.instance() is None:
 from qtutils.qled import LEDWidget
 
 
-
+# set icons for various interlock buttons. 
+from sys import platform
+if platform == 'linux2': QtGui.QIcon.setThemeName('gnome')
 INTERLOCK_DISABLED_ICON = QtGui.QIcon.fromTheme("emblem-important") 
-INTERLOCK_ENABLED_ICON = QtGui.QIcon.fromTheme("emblem-readonly")
-INTERLOCK_CONFIG_ICON = QtGui.QIcon.fromTheme("help-contents")
-INTERLOCK_ADD_ICON = QtGui.QIcon.fromTheme("address-book-new")
+INTERLOCK_ENABLED_ICON = QtGui.QIcon.fromTheme("emblem-favorite")
+INTERLOCK_CONFIG_ICON = QtGui.QIcon.fromTheme("document-open")
+INTERLOCK_ADD_ICON = QtGui.QIcon.fromTheme("appointment-new")
 INTERLOCK_DEL_ICON = QtGui.QIcon.fromTheme("edit-delete")
 
+
+
+
+#by stevens4, given a dictionary, populates a combo out of the keys and emits
+#the associated value via the choiceMade signal.
+class DictComboBox(QtGui.QComboBox):
+    currentKeyChanged = QtCore.Signal(object)
+    def __init__(self,itemsDict=None):
+        QtGui.QComboBox.__init__(self)
+        self.keysList = []
+        self.valsList = []
+        if itemsDict != None:
+            self.updateCombo(itemsDict)
+        def onCurrentIndexChanged(index):
+            self.currentKeyChanged.emit(self.valsList[index])
+        
+        self.currentIndexChanged.connect(onCurrentIndexChanged)
+    
+    def updateCombo(self,itemsDict):
+        self.keysList = []
+        self.valsList = []
+        self.clear()
+        
+        for key,val in itemsDict.items():
+             self.keysList.append(key)
+             self.valsList.append(val)
+             self.addItem(key)
+
+    def getCurrentKey(self):
+        return self.keysList[self.currentIndex()]
+        
+    def getCurrentVal(self):
+        return self.valsList[self.currentIndex()]
+        
 
 
 '''
@@ -25,90 +61,99 @@ a customized widget for controlling a relay and its associated interlocks
 '''
 
 class doControlRow(QtGui.QWidget):
-    def __init__(self,deviceName,doObject):
+    def __init__(self,deviceName,doObject,aiObjDict):
         # static class variables
         self.deviceName = deviceName
         self.doObject = doObject
+        self.aiObjDict = aiObjDict
         
         # dynamic class variables
-        self.enabled = self.doObject.getState()
-        self.interlocked = self.doObject.getInterlockState()
+        self.enabled = self.doObject.currentState
+        self.interlocked = self.doObject.interlockState
         
         # set up the layout
         QtGui.QWidget.__init__(self)
         self.setLayout(QtGui.QGridLayout())
         
         # add a status LED
-        LED = LEDWidget()
-        self.layout().addWidget(LED,1,1)
+        self.LED = LEDWidget(self.enabled)
+        self.layout().addWidget(self.LED,1,1)
         
         # add a toggle button
-        def onToggle():
-            if self.enabled:
-                print 'turning off '+self.deviceName
-                LED.toggle()
-                toggleButton.setText("turn on")
-                interlockEnableButton.setEnabled(False)
-                interlockDialogButton.setEnabled(False)
-                self.doObject.setState(False)
-            if not self.enabled:
-                print 'turning on '+self.deviceName
-                LED.toggle()
-                toggleButton.setText("turn off")
-                interlockEnableButton.setEnabled(True)
-                interlockDialogButton.setEnabled(True)
-                self.doObject.setState(True)
-            self.enabled = not self.enabled
-        toggleButton = QtGui.QPushButton("turn on")
-        toggleButton.clicked.connect(onToggle)
-        self.layout().addWidget(toggleButton,1,2)
+        self.toggleButton = QtGui.QPushButton("turn on")
+        if self.enabled: self.toggleButton.setText("turn off")
+        self.toggleButton.clicked.connect(self.onToggle)
+        self.layout().addWidget(self.toggleButton,1,2)
         
         # add a label
-        label = QtGui.QLabel(self.doObject.labelText)
-        label.setFont(QtGui.QFont("Helvetica [Cronyx]", 18))
-        label.setEnabled(self.enabled)
-        self.layout().addWidget(label,1,3)
+        self.label = QtGui.QLabel(self.doObject.labelText)
+        self.label.setFont(QtGui.QFont("Helvetica [Cronyx]", 36))
+        self.label.setEnabled(self.enabled)
+        self.layout().addWidget(self.label,1,3)
         self.layout().setColumnStretch(3,5) # make the label soak up extra space
         
-        # add a interlock enable
-        def interlockToggle():
-            if self.interlocked:
-                print 'disabling interlocks for '+self.deviceName
-                interlockEnableButton.setIcon( INTERLOCK_DISABLED_ICON )
-                self.interlocked = False
-                for interlock in self.doObject.getInterlocks().values():
-                    interlock.setState(False)
-                return
-            if not self.interlocked:                        
-                print 'enabling interlocks for '+self.deviceName
-                interlockEnableButton.setIcon( INTERLOCK_ENABLED_ICON )
-                self.interlocked = True
-                for interlock in self.doObject.getInterlocks().values():
-                    interlock.setState(True)
-                return
-        interlockEnableButton = QtGui.QPushButton()
-        interlockEnableButton.setIcon( INTERLOCK_DISABLED_ICON )
-        interlockEnableButton.setEnabled(False)
-        interlockEnableButton.clicked.connect(interlockToggle)
-        self.layout().addWidget(interlockEnableButton,1,4)
+        # add interlock toggle button
+        self.interlockEnableButton = QtGui.QPushButton()
+        self.interlockEnableButton.setIcon( INTERLOCK_DISABLED_ICON  )
+        if self.interlocked: self.interlockEnableButton.setIcon( INTERLOCK_ENABLED_ICON  )
+        self.interlockEnableButton.clicked.connect(self.interlockToggle)
+        self.layout().addWidget(self.interlockEnableButton,1,4)
         
-        # add a interlock config dialog
+        # add a interlock config dialog call button
         def interlockDialogClicked():
-            configDialog = interlockConfig(self.deviceName,self.doObject)
-        interlockDialogButton = QtGui.QPushButton()
-        interlockDialogButton.setIcon( INTERLOCK_CONFIG_ICON )
-        interlockDialogButton.setEnabled(False)
-        interlockDialogButton.clicked.connect(interlockDialogClicked)
-        self.layout().addWidget(interlockDialogButton,1,5)
+            configDialog = interlockConfig(self.deviceName,self.doObject,self.aiObjDict)
+        self.interlockDialogButton = QtGui.QPushButton()
+        self.interlockDialogButton.setIcon( INTERLOCK_CONFIG_ICON )
+        self.interlockDialogButton.clicked.connect(interlockDialogClicked)
+        self.layout().addWidget(self.interlockDialogButton,1,5)
         
         # run click events on buttons depending on initial state
-        if self.enabled: 
-            self.enabled = False
-            onToggle()
+        '''
+        if self.enabled:
+            self.LED.toggle(True)
+            self.toggleButton.setText("turn off")
+            self.label.setEnabled(True)
         if self.interlocked:
-            self.interlocked = False
-            interlockToggle()
+            self.interlockEnableButton.setIcon( INTERLOCK_ENABLED_ICON )
+            for interlock in self.doObject.getInterlocks().values():
+                interlock.setState(True)
+        '''
         
+    def onToggle(self):
+        if self.enabled:
+            self.LED.toggle()
+            self.toggleButton.setText("turn on")
+            self.label.setEnabled(False)
+            #self.interlockEnableButton.setEnabled(False)
+            #self.interlockDialogButton.setEnabled(False)
+            self.doObject.setState(False)
+            if self.interlocked: self.interlockToggle()
+        if not self.enabled:
+            self.LED.toggle()
+            self.toggleButton.setText("turn off")
+            self.label.setEnabled(True)
+            #self.interlockEnableButton.setEnabled(True)
+            #self.interlockDialogButton.setEnabled(True)
+            self.doObject.setState(True)
+        self.enabled = not self.enabled
+        
+    # add a interlock enable
+    def interlockToggle(self):
+        if self.interlocked:
+            print self.deviceName+' interlocks have been turned OFF'
+            self.interlockEnableButton.setIcon( INTERLOCK_DISABLED_ICON )
+            self.interlocked = False
+            self.doObject.interlockState = False
+            return
+        if not self.interlocked:                        
+            print self.deviceName+' interlocks have been turned ON'
+            self.interlockEnableButton.setIcon( INTERLOCK_ENABLED_ICON )
+            self.interlocked = True
+            self.doObject.interlockState = True
+            return
+        
+    def interlockTrip(self):
+        self.onToggle()
 
 
 '''
@@ -117,10 +162,11 @@ the interlocks for a given relay control.
 
 '''
 class interlockConfig(QtGui.QDialog):
-    def __init__(self,doName,digitalOutputObj):
+    def __init__(self,doName,digitalOutputObj,aiObjDict):
         # set class variables
         self.doName = doName
         self.doObj = digitalOutputObj
+        self.aiObjDict = aiObjDict
         
         # read in this DO object's existing interlocks and their config dict, create swap
         existingInterlocks = self.doObj.getInterlocks()
@@ -130,7 +176,6 @@ class interlockConfig(QtGui.QDialog):
         self.interlockSwapConf = {}
         for interlockKey, interlockConfDict in self.interlocksConf.items():
             self.interlockSwapConf[interlockKey] = interlockConfDict
-        print self.interlockSwapConf
         
         # set up the GUI options
         QtGui.QDialog.__init__(self)
@@ -142,11 +187,11 @@ class interlockConfig(QtGui.QDialog):
         # if save is clicked, update existing interlocks and add new ones
         def okayClicked():
             for interlockKey,interlock in self.doObj.getInterlocks().items():
-                print 'deleting interlock '+str(interlockKey)
+                print self.doName+' deleting interlock on '+interlock.aiChannelName+' '+interlock.logicalFunction+' '+str(interlock.limitValue)
                 self.doObj.deleteInterlock(interlockKey)
             for interlockKey,interlockConfDict in self.interlockSwapConf.items():
-                print 'adding new interlock '+str(interlockKey)
-                self.doObj.createInterlock(interlockConfDict)
+                print self.doName+' creating interlock on '+interlockConfDict['senseChan']+' '+interlockConfDict['logFun']+' '+str(interlockConfDict['limVal'])
+                self.doObj.createInterlock(interlockConfDict,self.aiObjDict[interlockConfDict['senseChan']])
             self.doObj.configUpdate()
             self.accept()
         okayButton = QtGui.QPushButton("save")
@@ -181,14 +226,15 @@ class interlockConfig(QtGui.QDialog):
         
         def addClicked():
             # get the current parameters from the add widget
-            aiChan = aiChanDropDown.currentText()
+            aiChanName = aiChanDropDown.getCurrentKey()
+            aiChanObj = aiChanDropDown.getCurrentVal()
             logicalFunc = logFuncDropDown.currentText()
             limitVal = limValSpinBox.value()
             
             # add new interlock conf dict to the swap dict
             newInterlockKey = len(self.interlockSwapConf.keys())
             newInterlockConfDict = {}
-            newInterlockConfDict['senseChan'] = aiChan
+            newInterlockConfDict['senseChan'] = aiChanName
             newInterlockConfDict['logFun'] = logicalFunc
             newInterlockConfDict['limVal'] = limitVal
             self.interlockSwapConf[newInterlockKey] = newInterlockConfDict
@@ -220,7 +266,10 @@ class interlockConfig(QtGui.QDialog):
         
         def deleteClicked():
             del self.interlockSwapConf[thisInterlockKey]
-            thisLayout.setHidden(True)    
+            delButton.setEnabled(False)
+            aiChanDropDown.setEnabled(False)
+            logFuncDropDown.setEnabled(False)
+            limValSpinBox.setEnabled(False)
         delButton = self._makeDelButton()
         delButton.clicked.connect(deleteClicked)
         
@@ -266,10 +315,8 @@ class interlockConfig(QtGui.QDialog):
     
     def _makeAIDD(self):
         # AI channel drop down
-        from config import analogInputsConfDict
-        aiDropDown = QtGui.QComboBox()
-        for aiName in analogInputsConfDict.keys():
-            aiDropDown.addItem(aiName)
+        aiDropDown = DictComboBox()
+        aiDropDown.updateCombo(self.aiObjDict)
         return aiDropDown
         
     def _makeLFDD(self):
