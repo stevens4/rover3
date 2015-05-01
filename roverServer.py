@@ -44,28 +44,42 @@ import ConfigParser
 
 from time import sleep
 
+# to preserve order in dictionaries
+from collections import OrderedDict
 
-################ logging/status/config files ###########################
+import sys
+from datetime import datetime
 
-# create the transcript file handle
-transcriptFilename = os.path.join(roverLogPath, 'roverTranscript.tsv')
-#transcript = LogFile(transcriptFilename)
+############################### logging ###########################
 
-# create the handle to the status file
-statusFilename = os.path.join(roverLogPath, 'roverStatus.tsv')
-#statusFile = LogFile(statusFilename)
-#lastState = statusFile.readLastLine()
+DEBUG = False
+
+# overwrite the print statement to prepend a timestamp & write these to the transcript file
+transcriptFilename = os.path.join(roverLogPath, 'roverTranscript.txt')
+transcriptFile = open(transcriptFilename,'a',0)
+oldPrint = sys.stdout
+if DEBUG: oldPrint = sys.stdout
+else: oldPrint = transcriptFile
+class newPrint():
+    def write(self,x):
+        if x == '\n':
+            oldPrint.write(x)
+        else:
+            oldPrint.write('['+str(datetime.now())+']\t'+x)
+sys.stdout = newPrint()
 
 
-
-# set up the GUI
+################################## set up the GUI ######################
 class RoverWidget(QtGui.QWidget):
     def __init__(self):
+        self.closeRequested = False
+        self.loopDone = True
+        
         # initialize dictionary of analog inputs and fill with our channels
-        self.analogInputs = {}
+        aiDummy = {}
         for aiName, aiConf in analogInputsConfDict.items():
-            print 'creating '+aiName+' ...'
-            self.analogInputs[aiName] = aiChannel(aiConf)
+            aiDummy[aiName] = aiChannel(aiConf)
+        self.analogInputs = OrderedDict(sorted(aiDummy.items(), key=lambda k: k[0]))
         
         # create the handle to the startup state file (this is the toggle state of each DO)
         self.startStateFilename = os.path.join(roverLogPath, 'startState.txt')
@@ -73,11 +87,10 @@ class RoverWidget(QtGui.QWidget):
         self.startStateConfigParser.read(self.startStateFilename)
         
         # initialize dictionary of digital outputs and fill with our channels, set to state file
-        self.digitalOutputs = {}
+        print 'creating relay toggles...'
+        doDummy = {}
         for doName, doConf in digitalOutputsConfDict.items():
-            print 'creating '+doName+' ...'
             doConf['name'] = doName
-            
             if doName in self.startStateConfigParser.sections():
                 initState = self.startStateConfigParser.get(doName,'initState')
                 initInterlockState = self.startStateConfigParser.get(doName,'initInterlockState')
@@ -88,8 +101,11 @@ class RoverWidget(QtGui.QWidget):
                 
             doConf['initState'] = initState
             doConf['initInterlockState'] = initInterlockState
-            self.digitalOutputs[doName] = doChannel(doConf,self.analogInputs) #give each DO object the aiChanDict so it can make its interlocks at start
+            doDummy[doName] = doChannel(doConf,self.analogInputs) #give each DO object the aiChanDict so it can make its interlocks at start
             
+        self.digitalOutputs = OrderedDict(sorted(doDummy.items(), key=lambda k: k[0]))
+        print 'done creating relays.'
+        
         # set general layout things
         QtGui.QWidget.__init__(self)
         self.setLayout(QtGui.QGridLayout()) # 10 columns wide
@@ -106,19 +122,18 @@ class RoverWidget(QtGui.QWidget):
         waterLabel = QtGui.QLabel(waterTempConf['labelText'])
         waterLabel.setFont(QtGui.QFont("Helvetica [Cronyx]", 40))
         waterLabel.setAlignment(QtCore.Qt.AlignHCenter)
-        waterTempLayout.addWidget(waterLabel)
+        self.layout().addWidget(waterLabel,0,3,1,3)
         
         waterLCD = QtGui.QLCDNumber(3)
         waterLCD.setSegmentStyle(QtGui.QLCDNumber.Flat)
         waterLCD.setFrameStyle(QtGui.QFrame.NoFrame)
         waterLCD.setNumDigits(6)
         waterLCD.display(20.05)
-        waterTempLayout.addWidget(waterLCD)
+        self.layout().addWidget(waterLCD,0,6,1,1)
         
         self.analogInputs['water temperature'].LCD = waterLCD
         
-        self.layout().addLayout(waterTempLayout,waterTempConf['guiRow'],waterTempConf['guiColumn'],1,4)
-        
+        #self.layout().addLayout(waterTempLayout,waterTempConf['guiRow'],waterTempConf['guiColumn'],1,4)
         
         # create column headers for the two chambers
         poohLabel = QtGui.QLabel("pooh")
@@ -141,17 +156,17 @@ class RoverWidget(QtGui.QWidget):
             thisLabel = QtGui.QLabel(aiConf['labelText'])
             thisLabel.setFont(QtGui.QFont("Helvetica [Cronyx]", 40))
             thisLabel.setAlignment(QtCore.Qt.AlignRight)
-            thisLayout.addWidget(thisLabel)
+            self.layout().addWidget(thisLabel,thisRowNumber,thisColumnStartNumber)
             
             thisLCD = QtGui.QLCDNumber(6)
             thisLCD.setSegmentStyle(QtGui.QLCDNumber.Flat)
             thisLCD.setFrameStyle(QtGui.QFrame.NoFrame)
             thisLCD.display(030)
-            thisLayout.addWidget(thisLCD)
+            self.layout().addWidget(thisLCD,thisRowNumber,thisColumnStartNumber+1,1,3)
             
             self.analogInputs[aiName].LCD = thisLCD
             
-            self.layout().addLayout(thisLayout,thisRowNumber,thisColumnStartNumber,1,3)
+            #self.layout().addLayout(thisLayout,thisRowNumber,thisColumnStartNumber,1,3)
                 
         # create a layout for each DO and add to specified layout
         self.doControlRows = []
@@ -175,57 +190,67 @@ class RoverWidget(QtGui.QWidget):
         
     def _loop(self):
         for order,aiChanObj in self.orderToRead:
+            # check if GUI is trying to close
+            if self.closeRequested:
+                self.threadDone = True
+                return
+            else:
+                self.threadDone = False
             # read new values on this sensor
             try:
                 newReading = aiChanObj.getNReadings(200)
                 aiChanObj.LCD.display(newReading)
             except TypeError:
+                print 'lost connection to ADC. retrying in .5s...'
                 sleep(.5)
-                print 'retrying...'
+                self._loop()
             
             # check all relays' interlocks based on new sensor value
             for thisDOControlRow in self.doControlRows:
                 relayEnabled = thisDOControlRow.doObject.currentState
                 if not relayEnabled: continue #skip if this DO is off
                 
-                interlockEnabled = thisDOControlRow.doObject.getInterlockState()
+                interlockEnabled = thisDOControlRow.doObject.interlockState
                 if not interlockEnabled: continue #skip if interlocks are overriden
                 
-                # iterate through interlocks and check values
-                for thisInterlock in thisDOControlRow.doObject.getInterlocks().values():
-                    if thisInterlock.testInterlock():
-                        thisDOControlRow.toggleButton.click()
-                        
-            
-            sleep(.1)
-            
+                # iterate through this DO's interlocks and check values
+                interlockTripped = thisDOControlRow.doObject.testInterlocks()
+                if interlockTripped:
+                    thisDOControlRow.toggleButton.click()
         self._loop()
     
     def closeEvent(self, event):
+        # tell the loop thread you're looking to close, so it can stop
+        self.closeRequested = True
         
         # update state file so that current DO on/off state persists on next run
-        print 'writing state file...'
+        print 'asked to shutdown. writing state file...'
+        
+        if DEBUG: print "relay name\t\t\t\tpower\tinterlocked"
+        
         for doName, doObj in self.digitalOutputs.items():
             state = doObj.getState() in [1]
             interlocksDict = doObj.getInterlocks()
-            if len(interlocksDict.keys()) == 0:
-                interlockState = False
-            else:
-                interlockState = interlocksDict[0].getState()
-            
+            interlockState = doObj.interlockState
             if doName not in self.startStateConfigParser.sections():
                 self.startStateConfigParser.add_section(doName)
             self.startStateConfigParser.set(doName, 'initState', state)
             self.startStateConfigParser.set(doName, 'initInterlockState', interlockState)
             
-            print doName+' is '+str(state)+'. with interlocks set to: '+str(interlockState)
+            numTabs = 5-(len(doName)/8)
+            tabs = '\t'*numTabs
+            if DEBUG: print doName+tabs+str(state)+'\t'+str(interlockState)
+            
             
         with open(self.startStateFilename, 'wb') as configfile:
             self.startStateConfigParser.write(configfile)
             
         import RPi.GPIO as GPIO
         #GPIO.cleanup()
-
+        
+        # don't close until loop has said it's no longer running
+        while not self.threadDone:
+            sleep(.1)
         event.accept()
 
 def main(container):
