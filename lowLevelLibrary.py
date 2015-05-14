@@ -74,12 +74,14 @@ GPIO.setwarnings(False) # silence overuse warnings in case you have two DO's on 
 
 # create DO channel objects
 class doChannel:
-    def __init__(self,confDict,aiChanDict):
+    def __init__(self,confDict,aiChanDict,clockFunct=None):
         # read in static class variables
         self.name = confDict['name']
         self.physChanNum = confDict['physicalChannel']
         self.labelText = confDict['labelText']
         self.aiChanDict = aiChanDict
+        self.clockFunction = clockFunct
+        
         
         self.currentState = False
         GPIO.setup(self.physChanNum,GPIO.OUT)
@@ -112,6 +114,10 @@ class doChannel:
   
     def setState(self, newState):
         GPIO.output(self.physChanNum, newState)
+        
+        if self.clockFunction is not None:
+            self.clockFunction()
+        
         self.currentState = newState
         if newState == True: stateStr = 'ON'
         if newState == False: stateStr = 'OFF'

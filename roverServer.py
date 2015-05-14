@@ -25,7 +25,7 @@ if QtCore.QCoreApplication.instance() is None:
 from functools import partial
 
 # config for channels and logPath
-from config import analogInputsConfDict, digitalOutputsConfDict, roverLogPath
+from config import analogInputsConfDict, digitalOutputsConfDict, roverLogPath, doClockPinNumber
 
 # analog input and digital output channel objects
 from lowLevelLibrary import aiChannel, doChannel
@@ -44,12 +44,17 @@ from time import sleep
 # to preserve order in dictionaries
 from collections import OrderedDict
 
+# to make timestamps for the transcript
 import sys
 from datetime import datetime
 
+# library to access pi's DIO
+import RPi.GPIO as GPIO
+
+
 ############################### logging ###########################
     
-DEBUG = False
+DEBUG = True
 
 # overwrite the print statement to prepend a timestamp & write these to the transcript file
 transcriptFilename = os.path.join(roverLogPath, 'roverTranscript.txt')
@@ -78,6 +83,13 @@ class RoverWidget(QtGui.QWidget):
             aiDummy[aiName] = aiChannel(aiConf)
         self.analogInputs = OrderedDict(sorted(aiDummy.items(), key=lambda k: k[0]))
         
+        
+        # initialize the DO clock pin for output
+        GPIO.setup(doClockPinNumber,GPIO.OUT)
+        def cycleDOClock():
+            GPIO.output(doClockPinNumber, True)
+            GPIO.output(doClockPinNumber, False)
+        
         # create the handle to the startup state file (this is the toggle state of each DO)
         self.startStateFilename = os.path.join(roverLogPath, 'startState.txt')
         self.startStateConfigParser = ConfigParser.RawConfigParser()
@@ -98,7 +110,8 @@ class RoverWidget(QtGui.QWidget):
                 
             doConf['initState'] = initState
             doConf['initInterlockState'] = initInterlockState
-            doDummy[doName] = doChannel(doConf,self.analogInputs) #give each DO object the aiChanDict so it can make its interlocks at start
+            doDummy[doName] = doChannel(doConf,self.analogInputs,clockFunct=cycleDOClock) 
+            #give each DO object the aiChanDict so it can make its interlocks at start
             
         self.digitalOutputs = OrderedDict(sorted(doDummy.items(), key=lambda k: k[0]))
         print 'done creating relays.'
