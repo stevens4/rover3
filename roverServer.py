@@ -53,7 +53,7 @@ from datetime import datetime
 import RPi.GPIO as GPIO
 
 # for making A2D measurements w/o freezing GUI
-import threading
+from threading import Thread, Event
 
 
 ############################### debug mode ########################
@@ -197,13 +197,15 @@ class RoverWidget(QtGui.QWidget):
         orderToReadDict = {}
         for aiChanObj in self.analogInputs.values():
             orderToReadDict[aiChanObj.readOrder] = aiChanObj
-        self.orderToRead = sorted(orderToReadDict.items(), key=operator.itemgetter(0))
+        orderToRead = sorted(orderToReadDict.items(), key=operator.itemgetter(0))
         
         
         # define a threaded process that polls the A2D channels, updates the LCDs, and tests interlocks
         class A2DThread(Thread):
-            def __init__(self, stopEvent):
+            def __init__(self, aiChanDict, doControlRows, stopEvent):
                 Thread.__init__(self)
+                self.orderToRead = aiChanDict
+                self.doControlRows = doControlRows
                 self.stopped = stopEvent
 
             def run(self):
@@ -229,13 +231,13 @@ class RoverWidget(QtGui.QWidget):
                             if interlockTripped:
                                 thisDOControlRow.toggleButton.click()
         
-        stopEvent = Event()
-        thread = A2DThread(stopEvent)
+        self.stopEvent = Event()
+        thread = A2DThread(orderToRead,self.doControlRows,self.stopEvent)
         thread.start()
 
     def closeEvent(self, event):
         # tell the A2DThread thread you're looking to close, so it can stop
-        stopFlag.set()
+        self.stopEvent.set()
         
         # update state file so that current DO on/off state persists on next run
         print 'asked to shutdown. writing state file...'
@@ -262,9 +264,6 @@ class RoverWidget(QtGui.QWidget):
         import RPi.GPIO as GPIO
         #GPIO.cleanup()
         
-        # don't close until loop has said it's no longer running
-        while not self.threadDone:
-            sleep(.1)
         event.accept()
 
 def main(container):
