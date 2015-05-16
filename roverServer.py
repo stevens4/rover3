@@ -43,6 +43,7 @@ from time import sleep
 
 # to preserve order in dictionaries
 from collections import OrderedDict
+import operator
 
 # to make timestamps for the transcript
 import sys
@@ -51,11 +52,16 @@ from datetime import datetime
 # library to access pi's DIO
 import RPi.GPIO as GPIO
 
+# for making A2D measurements w/o freezing GUI
+import threading
+
+
+############################### debug mode ########################
+
+DEBUG = len(sys.argv) > 1 and sys.argv[1] == 'debug'
+
 
 ############################### logging ###########################
-    
-DEBUG = True
-
 # overwrite the print statement to prepend a timestamp & write these to the transcript file
 transcriptFilename = os.path.join(roverLogPath, 'roverTranscript.txt')
 transcriptFile = open(transcriptFilename,'a',0)
@@ -187,51 +193,49 @@ class RoverWidget(QtGui.QWidget):
             self.layout().addWidget(thisDOControlRow,rowToPlace,colToPlace,1,5)
             self.doControlRows.append(thisDOControlRow)
             
-        # enter the update loop
+        # set order in which A2D measurements are made
         orderToReadDict = {}
         for aiChanObj in self.analogInputs.values():
             orderToReadDict[aiChanObj.readOrder] = aiChanObj
-        import operator
         self.orderToRead = sorted(orderToReadDict.items(), key=operator.itemgetter(0))
-        import threading
-        thread = threading.Thread(target=self._loop)
-        thread.setDaemon(True)
-        thread.start()
         
-    def _loop(self):
-        for order,aiChanObj in self.orderToRead:
-            # check if GUI is trying to close
-            if self.closeRequested:
-                self.threadDone = True
-                return
-            else:
-                self.threadDone = False
-            # read new values on this sensor
-            try:
-                newReading = aiChanObj.getNReadings(200)
-                aiChanObj.LCD.display(newReading)
-            except TypeError:
-                print 'lost connection to ADC. retrying in .5s...'
-                sleep(.5)
-                self._loop()
-            
-            # check all relays' interlocks based on new sensor value
-            for thisDOControlRow in self.doControlRows:
-                relayEnabled = thisDOControlRow.doObject.currentState
-                if not relayEnabled: continue #skip if this DO is off
-                
-                interlockEnabled = thisDOControlRow.doObject.interlockState
-                if not interlockEnabled: continue #skip if interlocks are overriden
-                
-                # iterate through this DO's interlocks and check values
-                interlockTripped = thisDOControlRow.doObject.testInterlocks()
-                if interlockTripped:
-                    thisDOControlRow.toggleButton.click()
-        self._loop()
-    
+        
+        # define a threaded process that polls the A2D channels, updates the LCDs, and tests interlocks
+        class A2DThread(Thread):
+            def __init__(self, stopEvent):
+                Thread.__init__(self)
+                self.stopped = stopEvent
+
+            def run(self):
+                while not self.stopped.wait(0.5):
+                    for order,aiChanObj in self.orderToRead:
+                        # try to read new values on this sensor
+                        try:
+                            newReading = aiChanObj.getNReadings(200)
+                            aiChanObj.LCD.display(newReading)
+                        except TypeError:
+                            print 'lost connection to ADC. retrying in .5s...'
+                        
+                        # check all relays' interlocks based on new sensor value
+                        for thisDOControlRow in self.doControlRows:
+                            relayEnabled = thisDOControlRow.doObject.currentState
+                            if not relayEnabled: continue #skip if this DO is off
+                            
+                            interlockEnabled = thisDOControlRow.doObject.interlockState
+                            if not interlockEnabled: continue #skip if interlocks are overriden
+                            
+                            # have DO check its interlocks, if one is tripped, simulate a user turning DO off
+                            interlockTripped = thisDOControlRow.doObject.testInterlocks()
+                            if interlockTripped:
+                                thisDOControlRow.toggleButton.click()
+        
+        stopEvent = Event()
+        thread = A2DThread(stopEvent)
+        thread.start()
+
     def closeEvent(self, event):
-        # tell the loop thread you're looking to close, so it can stop
-        self.closeRequested = True
+        # tell the A2DThread thread you're looking to close, so it can stop
+        stopFlag.set()
         
         # update state file so that current DO on/off state persists on next run
         print 'asked to shutdown. writing state file...'
