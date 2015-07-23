@@ -95,6 +95,9 @@ class RoverWidget(QtGui.QWidget):
         # initialize dictionary of analog inputs and fill with our channels
         aiDummy = {}
         for aiName, aiConf in analogInputsConfDict.items():
+            if DEBUG:    # if in debug mode display raw voltages
+                aiConf['mappingStyle'] = 'poly'
+                aiConf['mapParams'] = (0,1,0,0,0)
             aiDummy[aiName] = aiChannel(aiConf)
         self.analogInputs = OrderedDict(sorted(aiDummy.items(), key=lambda k: k[0]))
         
