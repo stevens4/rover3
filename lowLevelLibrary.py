@@ -9,6 +9,7 @@ class aiChannel:
         #open connection on physicalChannel
         self.name = confDict['labelText']
         self.i2cAddress = confDict['i2cAddress']
+        self.connectionType = confDict['connectionType']
         self.physChan = confDict['physicalChannel']
         self.gain = confDict['gainFactor']
         self.rate = confDict['sampleRate']
@@ -21,11 +22,21 @@ class aiChannel:
     
     # gets the latest raw, measured voltage off the ADC
     def getLatestVoltage(self):
-        return self.connection.readADCSingleEnded( 
-            channel=self.physChan, 
-            pga=self.gain,
-            sps=self.rate
-        )
+        if self.connectionType == 'RSE':
+            return self.connection.readADCSingleEnded( 
+                channel=self.physChan, 
+                pga=self.gain,
+                sps=self.rate
+            )
+        elif self.connectionType == 'diff':
+            return self.connection.readADCDifferential(
+                chP=self.physChan[0], chN=self.physChan[1],
+                pga=self.gain,
+                sps=self.rate
+            )
+        else:
+            print 'UNKNOWN CONNECTION TYPE SPECIFIED!!!'
+            return 0
        
     # maps the raw voltage to a reading (e.g. volts -> pressure)
     def _map(self,voltage):
@@ -52,18 +63,38 @@ class aiChannel:
         
     # gets N readings and returns the average
     def getNReadings(self,nSamp):
-        self.connection.startContinuousConversion(
-            channel = self.physChan, 
-            pga = self.gain,
-            sps = self.rate
-            )  
-        total = 0.
-        for i in range(nSamp):
-            total += self.connection.getLastConversionResults()
-        self.connection.stopContinuousConversion()
-        result = self._map(total/nSamp)
-        return result
- 
+        if self.connectionType == 'RSE':
+            self.connection.startContinuousConversion(
+                channel = self.physChan, 
+                pga = self.gain,
+                sps = self.rate
+                )  
+            total = 0.
+            for i in range(nSamp):
+                total += self.connection.getLastConversionResults()
+            self.connection.stopContinuousConversion()
+            result = self._map(total/nSamp)
+            return result
+     
+        elif self.connectionType == 'diff':
+            self.connection.startContinuousDifferentialConversion(
+                chP=self.physChan[0], chN=self.physChan[1],
+                pga=self.gain,
+                sps=self.rate
+            )
+            total = 0.
+            for i in range(nSamp):
+                total += self.connection.getLastConversionResults()
+            self.connection.stopContinuousConversion()
+            result = self._map(total/nSamp)
+            return result
+            
+        else:
+            print 'UNKNOWN CONNECTION TYPE SPECIFIED!!!'
+            return 0
+       
+        
+        
 
 from config import roverLogPath
 import ConfigParser
