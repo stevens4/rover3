@@ -25,7 +25,13 @@ if QtCore.QCoreApplication.instance() is None:
 from functools import partial
 
 # config for channels and logPath
-from config import analogInputsConfDict, digitalOutputsConfDict, roverLogPath, doClockPinNumber
+from config import analogInputsConfDict, digitalOutputsConfDict, roverLogPath
+
+# config for special GPIO pin numbers
+from config import doClockPinNumber, powerSensePinNumber
+
+# config for GUI constants
+from config import DOcontrolStartRow, poohAIColumn, tiggerAIColumn
 
 # analog input and digital output channel objects
 from lowLevelLibrary import aiChannel, doChannel
@@ -54,6 +60,9 @@ import RPi.GPIO as GPIO
 
 # for making A2D measurements w/o freezing GUI
 from threading import Thread, Event
+
+# the LED object
+from qtutils.qled import LEDWidget
 
 
 ############################### debug mode ########################
@@ -86,11 +95,15 @@ class RoverWidget(QtGui.QWidget):
         # initialize dictionary of analog inputs and fill with our channels
         aiDummy = {}
         for aiName, aiConf in analogInputsConfDict.items():
+            if DEBUG:    # if in debug mode display raw voltages
+                aiConf['mappingStyle'] = 'poly'
+                aiConf['mapParams'] = (0,1,0,0,0)
             aiDummy[aiName] = aiChannel(aiConf)
         self.analogInputs = OrderedDict(sorted(aiDummy.items(), key=lambda k: k[0]))
         
         
         # initialize the DO clock pin for output
+        GPIO.setmode(GPIO.BCM)  # use pin numberings printed on cobbler
         GPIO.setup(doClockPinNumber,GPIO.OUT)
         def cycleDOClock():
             GPIO.output(doClockPinNumber, True)
@@ -129,38 +142,50 @@ class RoverWidget(QtGui.QWidget):
         self.layout().setVerticalSpacing(10)
         self.layout().setColumnMinimumWidth(5,20)
         self.layout().setRowMinimumHeight(5,20)
-            
-            
-        # create a space spanning the full width at the top for the water
-        waterTempLayout = QtGui.QHBoxLayout()
+        
+        
+        # initialize the DI pin for power sense
+        GPIO.setup(powerSensePinNumber,GPIO.IN,pull_up_down=GPIO.PUD_DOWN)
+        powerState = GPIO.input(powerSensePinNumber)
+        
+        # create a space spanning the full width at the top for lab power
+        labPowerLabel = QtGui.QLabel('lab power')
+        labPowerLabel.setFont(QtGui.QFont("Helvetica [Cronyx]", 40))
+        labPowerLabel.setAlignment(QtCore.Qt.AlignHCenter)
+        self.layout().addWidget(labPowerLabel,0,3,1,3)
+        
+        self.labPowerLED = LEDWidget(powerState)
+        self.layout().addWidget(self.labPowerLED,0,6,1,1)
+        
+        
+        # create a space spanning the full width for the water
         waterTempConf = analogInputsConfDict['water temperature']
         
         waterLabel = QtGui.QLabel(waterTempConf['labelText'])
         waterLabel.setFont(QtGui.QFont("Helvetica [Cronyx]", 40))
         waterLabel.setAlignment(QtCore.Qt.AlignHCenter)
-        self.layout().addWidget(waterLabel,0,3,1,3)
+        self.layout().addWidget(waterLabel,1,3,1,3)
         
         waterLCD = QtGui.QLCDNumber(3)
         waterLCD.setSegmentStyle(QtGui.QLCDNumber.Flat)
         waterLCD.setFrameStyle(QtGui.QFrame.NoFrame)
         waterLCD.setNumDigits(6)
         waterLCD.display(20.05)
-        self.layout().addWidget(waterLCD,0,6,1,1)
+        self.layout().addWidget(waterLCD,1,6,1,1)
         
         self.analogInputs['water temperature'].LCD = waterLCD
         
-        #self.layout().addLayout(waterTempLayout,waterTempConf['guiRow'],waterTempConf['guiColumn'],1,4)
         
         # create column headers for the two chambers
         poohLabel = QtGui.QLabel("pooh")
         poohLabel.setFont(QtGui.QFont("Helvetica [Cronyx]", 40))
         poohLabel.setAlignment(QtCore.Qt.AlignHCenter)
-        self.layout().addWidget(poohLabel,1,0,1,5)
+        self.layout().addWidget(poohLabel,DOcontrolStartRow,poohAIColumn-1,1,5)
         
         tiggerLabel = QtGui.QLabel("tigger")
         tiggerLabel.setFont(QtGui.QFont("Helvetica [Cronyx]", 40))
         tiggerLabel.setAlignment(QtCore.Qt.AlignHCenter)
-        self.layout().addWidget(tiggerLabel,1,5,1,5)
+        self.layout().addWidget(tiggerLabel,DOcontrolStartRow,tiggerAIColumn-1,1,5)
         
         # create a layout for each AI and add to specified layout
         for aiName, aiConf in analogInputsConfDict.items():
@@ -199,7 +224,33 @@ class RoverWidget(QtGui.QWidget):
             orderToReadDict[aiChanObj.readOrder] = aiChanObj
         orderToRead = sorted(orderToReadDict.items(), key=operator.itemgetter(0))
         
-        
+        # set up a method to check if the lab power is still on and call that with a timer
+        def checkPower():
+            # check that the lab still has power
+            powerStatus = GPIO.input(powerSensePinNumber)
+            if powerStatus == True and self.tripped == True:
+                self.labPowerLED.toggle(state=True)
+                self.tripped = False
+                print 'lab power has been reestablished. waiting for instructions...'
+            
+            if powerStatus == False and self.tripped == False:
+                #execute this if power is lost
+                print '!!!!!ERROR!!!!! POWER LOSS DETECTED!!!!'
+                
+                self.labPowerLED.toggle(state=False)
+                
+                for doControlRow in self.doControlRows:
+                    if doControlRow.enabled:
+                        doControlRow.toggleButton.click()
+               
+                self.tripped = True
+                
+        self.tripped = False
+        self.checkPowerTimer = QtCore.QTimer()
+        self.checkPowerTimer.timeout.connect(checkPower)
+        self.checkPowerTimer.start(2000) # check every 2 seconds
+
+    
         # define a threaded process that polls the A2D channels, updates the LCDs, and tests interlocks
         class A2DThread(Thread):
             def __init__(self, aiChanDict, doControlRows, stopEvent):
@@ -207,10 +258,12 @@ class RoverWidget(QtGui.QWidget):
                 self.orderToRead = aiChanDict
                 self.doControlRows = doControlRows
                 self.stopped = stopEvent
+                self.tripped = False
 
             def run(self):
                 while not self.stopped.wait(0.5):
                     for order,aiChanObj in self.orderToRead:
+                        
                         # try to read new values on this sensor
                         try:
                             newReading = aiChanObj.getNReadings(200)
@@ -230,6 +283,8 @@ class RoverWidget(QtGui.QWidget):
                             interlockTripped = thisDOControlRow.doObject.testInterlocks()
                             if interlockTripped:
                                 thisDOControlRow.toggleButton.click()
+        
+    
         
         self.stopEvent = Event()
         thread = A2DThread(orderToRead,self.doControlRows,self.stopEvent)
@@ -261,8 +316,7 @@ class RoverWidget(QtGui.QWidget):
         with open(self.startStateFilename, 'wb') as configfile:
             self.startStateConfigParser.write(configfile)
             
-        import RPi.GPIO as GPIO
-        #GPIO.cleanup()
+        GPIO.cleanup()
         
         event.accept()
 

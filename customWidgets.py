@@ -87,7 +87,7 @@ class doControlRow(QtGui.QWidget):
         
         # add a label
         self.label = QtGui.QLabel(self.doObject.labelText)
-        self.label.setFont(QtGui.QFont("Helvetica [Cronyx]", 36))
+        self.label.setFont(QtGui.QFont("Helvetica [Cronyx]", 24))
         self.label.setEnabled(self.enabled)
         self.layout().addWidget(self.label,1,3)
         self.layout().setColumnStretch(3,5) # make the label soak up extra space
