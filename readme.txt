@@ -1,3 +1,8 @@
+see documentation/Rover_3_Documentation.pdf
+
+
+
+
 rover 3 functionality
 
 need 6 AI and 12 DO, at least
